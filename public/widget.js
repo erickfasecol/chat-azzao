@@ -15,10 +15,10 @@
  */
 (function () {
   'use strict';
-
+ 
   if (window.__azzaoChatCargado) return;
   window.__azzaoChatCargado = true;
-
+ 
   const script = document.currentScript;
   const cfg = {
     api: (script?.dataset.api || '').replace(/\/$/, '') || window.location.origin,
@@ -28,7 +28,7 @@
     invitacion: script?.dataset.invitacion || 'El churrasco brasileño, en su casa',
     posicion: script?.dataset.posicion === 'izquierda' ? 'izquierda' : 'derecha',
   };
-
+ 
   // --- Tipografías de marca ---
   if (!document.getElementById('azzao-fuentes')) {
     const pre = document.createElement('link');
@@ -36,7 +36,7 @@
     pre.href = 'https://fonts.gstatic.com';
     pre.crossOrigin = 'anonymous';
     document.head.appendChild(pre);
-
+ 
     const fuentes = document.createElement('link');
     fuentes.id = 'azzao-fuentes';
     fuentes.rel = 'stylesheet';
@@ -44,7 +44,7 @@
       'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Poppins:wght@300;400;500;600&display=swap';
     document.head.appendChild(fuentes);
   }
-
+ 
   // --- Identificador del visitante ---
   let idVisitante;
   try {
@@ -56,25 +56,25 @@
   } catch (e) {
     idVisitante = 'web-' + Math.random().toString(36).slice(2, 10);
   }
-
+ 
   const anfitrion = document.createElement('div');
   anfitrion.id = 'azzao-chat';
   document.body.appendChild(anfitrion);
   const raiz = anfitrion.attachShadow({ mode: 'open' });
-
+ 
   const lado = cfg.posicion === 'izquierda' ? 'left' : 'right';
-
+ 
   // Marca de fuego: la misma idea de la "O" encendida del logotipo.
   const LLAMA = `
     <svg viewBox="0 0 32 40" aria-hidden="true">
       <path d="M16 1c.6 4.2-1.2 6.6-3.4 8.9C9.7 12.7 6 15.9 6 21.9 6 28.6 10.8 34 16 34s10-5.4 10-12.1c0-4.4-2.2-7.2-4.3-9.6-.7 1.4-1.6 2.3-2.7 2.8.5-2.4.2-5-.9-7.2C17.2 5.9 16.7 3.2 16 1z"/>
     </svg>`;
-
+ 
   raiz.innerHTML = `
     <style>
       :host { all: initial; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
-
+ 
       .capa {
         --carbon: #363636;
         --carbon-hondo: #262626;
@@ -91,7 +91,7 @@
         font-weight: 400;
         line-height: 1.55;
       }
-
+ 
       /* --- Burbuja --- */
       .burbuja {
         width: 62px; height: 62px;
@@ -110,7 +110,7 @@
       .burbuja .equis { display: none; width: 24px; height: 24px; }
       .abierto .burbuja .llama { display: none; }
       .abierto .burbuja .equis { display: block; }
-
+ 
       /* --- Globo de invitación --- */
       .globo {
         position: absolute;
@@ -144,7 +144,7 @@
         font-family: inherit;
       }
       .abierto .globo, .globo.oculto { display: none; }
-
+ 
       /* --- Panel --- */
       .panel {
         position: absolute;
@@ -166,7 +166,7 @@
         from { opacity: 0; transform: translateY(14px) scale(.985); }
         to   { opacity: 1; transform: none; }
       }
-
+ 
       header {
         background:
           radial-gradient(120% 140% at 12% 0%, rgba(127, 73, 44, .95), transparent 62%),
@@ -196,7 +196,7 @@
         color: transparent;
       }
       header p { font-size: 12px; color: rgba(242, 232, 201, .72); letter-spacing: .02em; }
-
+ 
       /* Cerrar desde la cabecera. En celular es la única salida, porque allá
          el panel ocupa toda la pantalla y la burbuja se esconde. */
       .cerrarPanel {
@@ -213,7 +213,7 @@
         font-family: inherit;
         flex: none;
       }
-
+ 
       .mensajes {
         flex: 1;
         overflow-y: auto;
@@ -229,7 +229,7 @@
       .mensajes::-webkit-scrollbar-thumb {
         background: rgba(242,196,109,.28); border-radius: 3px;
       }
-
+ 
       .msj {
         max-width: 85%;
         padding: 11px 15px;
@@ -262,7 +262,7 @@
         text-align: center;
         max-width: 92%;
       }
-
+ 
       .puntos { display: flex; gap: 5px; padding: 15px; }
       .puntos i {
         width: 7px; height: 7px; border-radius: 50%;
@@ -275,7 +275,7 @@
         0%, 60%, 100% { transform: translateY(0); opacity: .4; }
         30% { transform: translateY(-5px); opacity: 1; }
       }
-
+ 
       .sugerencias {
         display: flex; flex-wrap: wrap; gap: 7px;
         padding: 6px 16px 14px;
@@ -292,7 +292,7 @@
         transition: background .15s ease, color .15s ease;
       }
       .sugerencias button:hover { background: var(--oro); color: #3A2410; }
-
+ 
       form {
         display: flex;
         align-items: flex-end;
@@ -327,7 +327,7 @@
       }
       .enviar:disabled { opacity: .4; cursor: default; }
       .enviar svg { width: 18px; height: 18px; fill: #4A2B14; }
-
+ 
       .pie {
         text-align: center;
         font-size: 11px;
@@ -337,7 +337,7 @@
         background: var(--carbon);
         letter-spacing: .02em;
       }
-
+ 
       @media (max-width: 480px) {
         .capa { bottom: 16px; ${lado}: 16px; }
         .panel {
@@ -356,14 +356,14 @@
         * { animation: none !important; transition: none !important; }
       }
     </style>
-
+ 
     <div class="capa">
       <div class="globo oculto" id="globo" role="button" tabindex="0">
         <button class="x" id="cerrarGlobo" aria-label="Cerrar aviso">✕</button>
         <b id="textoGlobo"></b>
         Pregúnteme lo que quiera saber.
       </div>
-
+ 
       <div class="panel" role="dialog" aria-label="Chat con AZZAO">
         <header>
           <div class="sello">${LLAMA}</div>
@@ -373,15 +373,15 @@
           </div>
           <button class="cerrarPanel" id="cerrarPanel" aria-label="Cerrar chat">✕</button>
         </header>
-
+ 
         <div class="mensajes" id="mensajes" role="log" aria-live="polite"></div>
-
+ 
         <div class="sugerencias" id="sugerencias">
           <button type="button">¿Cómo funciona?</button>
           <button type="button">¿Sirve en apartamento?</button>
           <button type="button">Avísenme cuando salga</button>
         </div>
-
+ 
         <form id="formulario">
           <textarea id="entrada" rows="1" placeholder="Escriba su mensaje…"
                     aria-label="Mensaje"></textarea>
@@ -391,16 +391,16 @@
         </form>
         <div class="pie">Asistente automatizado de AZZAO</div>
       </div>
-
+ 
       <button class="burbuja" id="burbuja" aria-label="Abrir chat" aria-expanded="false">
         <span class="llama">${LLAMA}</span>
         <svg class="equis" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
       </button>
     </div>
   `;
-
+ 
   raiz.getElementById('textoGlobo').textContent = cfg.invitacion;
-
+ 
   const capa = raiz.querySelector('.capa');
   const burbuja = raiz.getElementById('burbuja');
   const globo = raiz.getElementById('globo');
@@ -410,11 +410,11 @@
   const formulario = raiz.getElementById('formulario');
   const entrada = raiz.getElementById('entrada');
   const botonEnviar = raiz.getElementById('enviar');
-
+ 
   let abierto = false;
   let saludado = false;
   let enviando = false;
-
+ 
   function pintar(clase, texto) {
     const div = document.createElement('div');
     div.className = clase;
@@ -423,7 +423,7 @@
     mensajes.scrollTop = mensajes.scrollHeight;
     return div;
   }
-
+ 
   function alternar() {
     abierto = !abierto;
     capa.classList.toggle('abierto', abierto);
@@ -437,7 +437,7 @@
       if (window.innerWidth > 480) entrada.focus();
     }
   }
-
+ 
   burbuja.addEventListener('click', alternar);
   raiz.getElementById('cerrarPanel').addEventListener('click', alternar);
   globo.addEventListener('click', (e) => {
@@ -454,54 +454,60 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && abierto) alternar();
   });
-
+ 
   sugerencias.addEventListener('click', (e) => {
     const boton = e.target.closest('button');
     if (!boton) return;
     entrada.value = boton.textContent;
     formulario.requestSubmit();
   });
-
+ 
   entrada.addEventListener('input', () => {
     entrada.style.height = 'auto';
     entrada.style.height = Math.min(entrada.scrollHeight, 98) + 'px';
   });
-
+ 
   entrada.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       formulario.requestSubmit();
     }
   });
-
+ 
   formulario.addEventListener('submit', async (e) => {
     e.preventDefault();
     const texto = entrada.value.trim();
     if (!texto || enviando) return;
-
+ 
     enviando = true;
     botonEnviar.disabled = true;
     sugerencias.style.display = 'none';
-
+ 
     pintar('msj yo', texto);
     entrada.value = '';
     entrada.style.height = 'auto';
-
+ 
     const esperando = document.createElement('div');
     esperando.className = 'msj bot puntos';
     esperando.innerHTML = '<i></i><i></i><i></i>';
     mensajes.appendChild(esperando);
     mensajes.scrollTop = mensajes.scrollHeight;
-
+ 
+    // Sin un tope de espera, si el servidor se queda pensando el chat se
+    // congela para siempre y el visitante no sabe qué pasó.
+    const reloj = new AbortController();
+    const cortar = setTimeout(() => reloj.abort(), 60000);
+ 
     try {
       const peticion = await fetch(cfg.api + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ telefono: idVisitante, texto }),
+        signal: reloj.signal,
       });
       const datos = await peticion.json().catch(() => ({}));
       esperando.remove();
-
+ 
       if (!peticion.ok || datos.error) {
         pintar('nota', datos.error || 'No pudimos procesar su mensaje. Intente de nuevo.');
       } else {
@@ -509,21 +515,28 @@
       }
     } catch (error) {
       esperando.remove();
-      pintar('nota', 'No pudimos conectarnos. Por favor intente de nuevo en un momento.');
+      pintar(
+        'nota',
+        error.name === 'AbortError'
+          ? 'La respuesta está tardando más de lo normal. Intente de nuevo, por favor.'
+          : 'No pudimos conectarnos. Por favor intente de nuevo en un momento.'
+      );
     } finally {
+      clearTimeout(cortar);
       enviando = false;
       botonEnviar.disabled = false;
       if (window.innerWidth > 480) entrada.focus();
     }
   });
-
+ 
   setTimeout(() => {
     if (!abierto) globo.classList.remove('oculto');
   }, 6000);
-
+ 
   // Para abrir el chat desde un botón de la página: window.AzzaoChat.abrir()
   window.AzzaoChat = {
     abrir: () => { if (!abierto) alternar(); },
     cerrar: () => { if (abierto) alternar(); },
   };
 })();
+ 
