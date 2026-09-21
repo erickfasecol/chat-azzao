@@ -24,8 +24,8 @@
     api: (script?.dataset.api || '').replace(/\/$/, '') || window.location.origin,
     saludo:
       script?.dataset.saludo ||
-      'Bienvenido a AZZAO. Estamos por lanzar una churrasquera eléctrica pensada para vivir el churrasco brasileño en casa, sin humo y sin complicaciones. ¿Le cuento cómo funciona?',
-    invitacion: script?.dataset.invitacion || 'El churrasco brasileño, en su casa',
+      'Bienvenido a AZZAO. No vendemos asadores: vendemos domingos. Estamos por abrir la tienda y con gusto le cuento de qué se trata. ¿Qué le gustaría saber?',
+    invitacion: script?.dataset.invitacion || 'No vendemos asadores. Vendemos domingos.',
     posicion: script?.dataset.posicion === 'izquierda' ? 'izquierda' : 'derecha',
   };
  
@@ -378,8 +378,9 @@
  
         <div class="sugerencias" id="sugerencias">
           <button type="button">¿Cómo funciona?</button>
-          <button type="button">¿Sirve en apartamento?</button>
-          <button type="button">Avísenme cuando salga</button>
+          <button type="button">¿Eléctrico o al carbón?</button>
+          <button type="button">¿Cuándo abre la tienda?</button>
+          <button type="button">Avísenme cuando abran</button>
         </div>
  
         <form id="formulario">
