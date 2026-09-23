@@ -3,7 +3,7 @@
 //   2. Los pasa por el cerebro y responde
 //   3. Sirve un simulador web en / para probar sin WhatsApp
 //   4. Sirve el widget de chat que se pega en fasecol.com
- 
+
 import 'dotenv/config';
 import express from 'express';
 import fs from 'node:fs';
@@ -12,11 +12,12 @@ import { fileURLToPath } from 'node:url';
 import { responder } from './cerebro.js';
 import { directorioDeRegistros } from './registro.js';
 import { proveedorActivo, modeloActivo, conversar } from './proveedores.js';
+import { obtenerCatalogo, estadoDelCatalogo } from './catalogo.js';
 import { enviarTexto, marcarLeido, firmaValida, extraerMensajes } from './whatsapp.js';
- 
+
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const app = express();
- 
+
 // Guardamos el cuerpo sin procesar para poder verificar la firma de Meta.
 app.use(
   express.json({
@@ -32,11 +33,11 @@ const DOMINIOS_PERMITIDOS = (process.env.DOMINIOS_PERMITIDOS || '')
   .split(',')
   .map((d) => d.trim().replace(/\/$/, ''))
   .filter(Boolean);
- 
+
 function dominioAutorizado(req) {
   const origen = req.get('origin');
   if (!origen) return true; // peticiones sin navegador de por medio
- 
+
   // El propio sitio donde vive el bot siempre puede llamarse a sí mismo.
   // Sin esto, la página de prueba quedaría bloqueada por su propio servidor.
   try {
@@ -44,11 +45,11 @@ function dominioAutorizado(req) {
   } catch (e) {
     return false; // cabecera Origin malformada
   }
- 
+
   if (!DOMINIOS_PERMITIDOS.length) return true; // sin lista configurada: modo abierto (pruebas)
   return DOMINIOS_PERMITIDOS.includes(origen.replace(/\/$/, ''));
 }
- 
+
 app.use((req, res, next) => {
   const origen = req.get('origin');
   if (origen && dominioAutorizado(req)) {
@@ -61,18 +62,18 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
- 
+
 app.use(express.static(path.join(RAIZ, 'public')));
- 
+
 // Evita responder dos veces si Meta reenvía el mismo mensaje.
 const yaAtendidos = new Set();
- 
+
 // --- Verificación del webhook (Meta la llama una sola vez, al configurarlo) ---
 app.get('/webhook', (req, res) => {
   const modo = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const reto = req.query['hub.challenge'];
- 
+
   if (modo === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
     console.log('[webhook] Verificado por Meta.');
     return res.status(200).send(reto);
@@ -80,28 +81,28 @@ app.get('/webhook', (req, res) => {
   console.warn('[webhook] Verificación rechazada.');
   return res.sendStatus(403);
 });
- 
+
 // --- Mensajes entrantes de WhatsApp ---
 app.post('/webhook', async (req, res) => {
   if (!firmaValida(req)) {
     console.warn('[webhook] Firma inválida, mensaje descartado.');
     return res.sendStatus(401);
   }
- 
+
   // Meta espera un 200 rápido; si nos demoramos, reenvía el mensaje.
   res.sendStatus(200);
- 
+
   for (const mensaje of extraerMensajes(req.body)) {
     if (yaAtendidos.has(mensaje.id)) continue;
     yaAtendidos.add(mensaje.id);
     if (yaAtendidos.size > 1000) yaAtendidos.clear();
- 
+
     marcarLeido(mensaje.id);
- 
+
     try {
       const { respuesta, avisos } = await responder(mensaje.de, mensaje.texto);
       await enviarTexto(mensaje.de, respuesta);
- 
+
       const asesor = process.env.NUMERO_ASESOR;
       if (asesor && avisos.length) {
         for (const aviso of avisos) {
@@ -118,13 +119,13 @@ app.post('/webhook', async (req, res) => {
     }
   }
 });
- 
+
 // --- Límite de uso ---
 // El chat de la página queda expuesto a internet, así que hay que evitar que
 // alguien lo use en exceso y le dispare la cuenta de Claude.
 const usos = new Map();
 const LIMITE_MENSAJES = Number(process.env.LIMITE_MENSAJES_HORA || 40);
- 
+
 function pasaElLimite(clave) {
   const ahora = Date.now();
   const ventana = 60 * 60 * 1000;
@@ -138,13 +139,13 @@ function pasaElLimite(clave) {
   if (usos.size > 5000) usos.clear();
   return true;
 }
- 
+
 // --- Chat web: lo usan el simulador y el widget de la página ---
 app.post('/api/chat', async (req, res) => {
   if (!dominioAutorizado(req)) {
     return res.status(403).json({ error: 'Dominio no autorizado.' });
   }
- 
+
   const { telefono = 'prueba-web', texto } = req.body || {};
   if (!texto || !texto.trim()) {
     return res.status(400).json({ error: 'Falta el texto del mensaje.' });
@@ -152,7 +153,7 @@ app.post('/api/chat', async (req, res) => {
   if (texto.length > 1500) {
     return res.status(400).json({ error: 'El mensaje es demasiado largo.' });
   }
- 
+
   const clave = req.ip || telefono;
   if (!pasaElLimite(clave)) {
     return res.status(429).json({
@@ -161,7 +162,7 @@ app.post('/api/chat', async (req, res) => {
         'y con gusto lo atendemos.',
     });
   }
- 
+
   try {
     const { respuesta, avisos } = await responder(telefono, texto.trim());
     res.json({ respuesta, avisos });
@@ -176,26 +177,27 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 });
- 
+
 // --- Diagnóstico ---
 // El visitante ve un mensaje genérico a propósito, pero usted necesita la causa
 // real. Esta página se la muestra sin tener que buscar en los registros.
 // Protegida con CLAVE_ADMIN:
 //   https://su-direccion/diagnostico?clave=SU-CLAVE
 let ultimoError = null;
- 
+
 app.get('/diagnostico', async (req, res) => {
   const clave = process.env.CLAVE_ADMIN;
   if (!clave) return res.status(404).json({ error: 'Defina CLAVE_ADMIN para usar esto.' });
   if (req.query.clave !== clave) return res.status(401).json({ error: 'Clave incorrecta.' });
- 
+
   const informe = {
     cerebro: proveedorActivo(),
     modelo: modeloActivo(),
     hojaDeGoogle: Boolean(process.env.HOJA_WEBHOOK),
     ultimoErrorDelChat: ultimoError,
+    catalogo: estadoDelCatalogo(),
   };
- 
+
   // Prueba real contra el proveedor, con una pregunta mínima.
   try {
     const inicio = Date.now();
@@ -215,10 +217,10 @@ app.get('/diagnostico', async (req, res) => {
       causa: error?.message || String(error),
     };
   }
- 
+
   res.json(informe);
 });
- 
+
 // --- Descargar los registros ---
 // En un servidor en la nube usted no puede abrir los archivos del disco, así que
 // esta es la forma de bajar la lista de espera. Protegido con una clave que usted
@@ -231,7 +233,7 @@ app.get('/registros/:archivo', (req, res) => {
   if (req.query.clave !== clave) {
     return res.status(401).send('Clave incorrecta.');
   }
- 
+
   const permitidos = {
     'lista-de-espera': 'lista_de_espera.csv',
     'intenciones': 'intenciones_de_compra.csv',
@@ -243,14 +245,14 @@ app.get('/registros/:archivo', (req, res) => {
     return res.status(404).send('Archivo no encontrado. Opciones: ' +
       Object.keys(permitidos).join(', '));
   }
- 
+
   const ruta = path.join(directorioDeRegistros(), nombre);
   if (!fs.existsSync(ruta)) {
     return res.status(404).send('Todavía no hay registros en ' + nombre);
   }
   res.download(ruta, nombre);
 });
- 
+
 app.get('/salud', (_req, res) => {
   res.json({
     estado: 'ok',
@@ -260,17 +262,29 @@ app.get('/salud', (_req, res) => {
     whatsapp: Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
     registros: directorioDeRegistros(),
     registrosPersistentes: Boolean(process.env.REGISTROS_DIR),
+    catalogo: estadoDelCatalogo(),
     dominiosPermitidos: DOMINIOS_PERMITIDOS.length ? DOMINIOS_PERMITIDOS : 'todos (modo pruebas)',
   });
 });
- 
+
 const PUERTO = process.env.PORT || 3000;
 // En la nube hay que escuchar en 0.0.0.0, no solo en localhost.
 app.listen(PUERTO, '0.0.0.0', () => {
   console.log(`\n  Asistente AZZAO corriendo en el puerto ${PUERTO}`);
   console.log(`  Pagina de prueba: http://localhost:${PUERTO}`);
   console.log(`  Registros en:     ${directorioDeRegistros()}`);
- 
+
+  // Primera lectura de la tienda al arrancar, para que el primer visitante no
+  // tenga que esperarla.
+  obtenerCatalogo().then((texto) => {
+    const estado = estadoDelCatalogo();
+    if (texto) {
+      console.log(`  Catálogo:         ${estado.productos} productos leídos de ${estado.tienda}`);
+    } else {
+      console.log(`  Catálogo:         no se pudo leer la tienda, se usa data/negocio.md`);
+    }
+  });
+
   const proveedor = proveedorActivo();
   if (proveedor === 'ninguno') {
     console.warn(
@@ -299,4 +313,3 @@ app.listen(PUERTO, '0.0.0.0', () => {
   }
   console.log('');
 });
- 
