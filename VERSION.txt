@@ -1,2 +1,7 @@
-Version GEMINI v2 — 18 de September de 2026
-Si este archivo aparece en GitHub, la version correcta quedo subida.
+Version CATALOGO AUTOMATICO v3 — 23 de septiembre de 2026
+
+Novedad: el bot lee los productos directamente de azzao.com cada 15 minutos.
+Cuando usted sube o cambia un producto en WordPress, el bot se entera solo.
+
+Si este archivo aparece en GitHub con la fecha del 23 de septiembre,
+la version correcta quedo subida.
