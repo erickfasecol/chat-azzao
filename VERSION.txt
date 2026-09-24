@@ -1,10 +1,10 @@
-Version CATALOGO v3.2 — 24 de septiembre de 2026
+Version CATALOGO v4 — 24 de septiembre de 2026
 
-Dos correcciones:
- 1. La tienda bloqueaba al bot. Ahora se presenta como navegador y la
-    lectura pasa por detras, sin hacer esperar nunca al chat.
- 2. El error "inconveniente" era Gemini saturado (503). Ahora el bot
-    reintenta solo y el visitante ni se entera.
+El bot ya no entra a leer la tienda: ahora la pagina le MANDA el catalogo
+cada vez que se guarda un producto. Asi el Anti-Bot de SiteGround no puede
+bloquearlo, y el chat queda al dia al instante.
+
+Incluye tambien los reintentos para el error 503 de Gemini.
 
 Si este archivo aparece en GitHub con la fecha del 24 de septiembre,
 la version correcta quedo subida.

@@ -1,55 +1,80 @@
 =====================================================================
-  AZZAO — DOS CORRECCIONES  (24 de septiembre de 2026)
+  AZZAO — EL CATALOGO, RESUELTO DE RAIZ  (24 de septiembre de 2026)
 =====================================================================
 
-1) EL ERROR QUE LE SALIA AL ESCRIBIR
+QUE PASABA
+Quien bloqueaba al bot era SiteGround, su hosting. Su sistema Anti-Bot le
+devolvia un captcha al bot en vez de la lista de productos. Por eso desde
+su navegador la tienda se ve bien y desde el bot no. Ese sistema no se
+puede configurar desde el panel de SiteGround.
 
-El log lo dijo claro:
+LA SOLUCION
+Le dimos vuelta al sentido. En vez de que el bot entre a buscar la lista,
+ahora es su PAGINA la que se la MANDA al bot, cada vez que usted guarda un
+producto. Como sale desde adentro de su propio sitio, no hay firewall que
+lo bloquee. Y de paso el bot se entera al instante, no a los 15 minutos.
 
-  503 "This model is currently experiencing high demand"
+Son dos piezas, y hay que hacer las dos.
 
-Eso es Google diciendo que su modelo gratuito esta saturado en ese
-momento. No es su llave, no es su codigo y no es el cambio del catalogo.
-Pasa y se quita solo en segundos, pero el bot se rendia al primer intento
-y al visitante le salia el error.
-
-Ahora el bot reintenta solo, hasta 3 veces, esperando cada vez un poquito
-mas. En las pruebas se recupero de dos 503 seguidos en 3 segundos y el
-visitante vio una respuesta normal.
-
-Si de plano Google no responde, al visitante ya no le sale un error seco:
-le sale el WhatsApp para que lo atiendan igual.
-
-2) EL CATALOGO QUE NO SE ACTUALIZABA
-
-Su pagina le devolvia al bot una pagina HTML de bloqueo en vez de la
-lista de productos. Desde internet la lista se ve bien: el bloqueo es
-solo contra el servidor del bot, y suele ser un plugin de seguridad
-(Wordfence, All In One Security) o el firewall del hosting.
-
-Ahora el bot se presenta como un navegador normal, que destapa la mayoria
-de esos bloqueos. Ademas la lectura de la tienda pasa POR DETRAS: el chat
-ya nunca espera por ella.
-
-ARCHIVOS — los cuatro van DENTRO de la carpeta src:
+---------------------------------------------------------------------
+  PASO 1 — SUBIR LOS ARCHIVOS DEL BOT A GITHUB
+---------------------------------------------------------------------
+Los cuatro van DENTRO de la carpeta src:
 
   src/catalogo.js
   src/cerebro.js
   src/server.js
-  src/proveedores.js     <-- este es el de los reintentos
+  src/proveedores.js
 
   VERSION.txt y .env.example van en la raiz.
 
-NO hay que agregar ninguna variable en Render. Todo trae buen valor por
-defecto.
+---------------------------------------------------------------------
+  PASO 2 — PONER LA CLAVE EN RENDER
+---------------------------------------------------------------------
+En Render, servicio chat-azzao -> Environment -> Add Environment Variable
 
-DESPUES DE SUBIR
-Espere 3 minutos, entre a azzao.com y escribale al chat. Deberia
-responderle normal.
+  Key:    CLAVE_CATALOGO
+  Value:  oJnP9gKnJEEahDHMI7yKdFMYR8mGGfgQ
 
-Luego abra:  https://chat-azzao.onrender.com/salud
+Guarde. Render se reinicia solo.
+(Puede inventar otra clave si quiere, pero tiene que ser la misma en el
+paso 3. Y esta clave NO va en GitHub, solo en Render.)
 
-En la parte "catalogo":
- - "productos": 5  ->  quedo resuelto, el bot ya se actualiza solo.
- - "productos": 0  ->  mireme el renglon "respondio": ahi dice que pagina
-   esta devolviendo su sitio. Mandeme eso y sabemos quien bloquea.
+---------------------------------------------------------------------
+  PASO 3 — ACTUALIZAR EL PLUGIN DE WORDPRESS
+---------------------------------------------------------------------
+El plugin nuevo va en el otro archivo que le mande:
+PLUGIN-CHAT-AZZAO-v1.1.zip
+
+  1. WordPress -> Plugins -> Anadir nuevo -> Subir plugin
+  2. Elija el ZIP y dele Instalar
+  3. Le va a decir que ya existe: elija REEMPLAZAR con el subido
+  4. Actívelo si quedo desactivado
+
+Despues vaya a Ajustes -> Chat AZZAO y en el campo nuevo
+"Clave del catalogo" pegue exactamente la misma de arriba:
+
+  oJnP9gKnJEEahDHMI7yKdFMYR8mGGfgQ
+
+Guarde los cambios.
+
+---------------------------------------------------------------------
+  PASO 4 — COMPROBAR
+---------------------------------------------------------------------
+En esa misma pantalla, abajo, hay un boton "Enviar el catalogo ahora".
+Dele clic.
+
+  - Sale en verde "Catalogo enviado"  ->  quedo funcionando.
+  - Sale en rojo  ->  el mensaje le dice que fallo (clave que no coincide,
+    o que falta la variable en Render).
+
+Para confirmarlo del otro lado, abra:
+  https://chat-azzao.onrender.com/salud
+
+En la parte "catalogo" debe decir:
+  "origen": "enviado por la pagina"
+  "productos": 5
+
+De ahi en adelante no tiene que volver a tocar nada: cada vez que guarde
+un producto, el bot se entera solo. Ademas se manda una vez al dia por si
+algun envio se pierde.
