@@ -35,9 +35,15 @@ let memoria = {
   error: null,
   pista: null,
   proximoIntento: 0,
+  origen: 'ninguno',
 };
 
 let enCurso = null;
+
+// Cuando la propia página nos manda el catálogo (ver recibirCatalogo), dejamos
+// de ir a buscarlo. Es el modo bueno: no hay firewall que lo bloquee y el bot
+// se entera en el instante en que se guarda un producto.
+let modoEnvio = false;
 
 /** Quita etiquetas HTML y deja texto corrido legible. */
 function sinHtml(html) {
@@ -130,6 +136,90 @@ function armarTexto(productos) {
   return lineas.join('\n').trim();
 }
 
+/**
+ * Igual que armarTexto, pero para la lista que manda el plugin de WordPress,
+ * que viene ya masticada y con el precio tal como lo muestra la tienda.
+ */
+function armarTextoEnviado(productos) {
+  const porCategoria = new Map();
+
+  for (const p of productos) {
+    const clave = String(p?.categoria || 'Sin categoría').trim() || 'Sin categoría';
+    if (!porCategoria.has(clave)) porCategoria.set(clave, []);
+    porCategoria.get(clave).push(p);
+  }
+
+  const lineas = [];
+
+  for (const [categoria, lista] of porCategoria) {
+    lineas.push(`### ${categoria}`);
+    lineas.push('');
+
+    for (const p of lista) {
+      const nombre = String(p?.nombre || '').trim();
+      if (!nombre) continue;
+
+      lineas.push(`**${nombre}** — ${String(p?.precio || '').trim() || 'precio no publicado'}`);
+
+      const datos = [];
+      if (p?.sku) datos.push(`SKU ${String(p.sku).trim()}`);
+      if (p?.disponible === false) {
+        datos.push('AGOTADO');
+      } else if (p?.existencias) {
+        datos.push(`quedan ${p.existencias}`);
+      }
+      if (datos.length) lineas.push(datos.join(' · '));
+
+      const descripcion = sinHtml(p?.descripcion);
+      lineas.push(
+        descripcion
+          ? descripcion.slice(0, 1200)
+          : 'Sin descripción publicada. Si preguntan detalles de este producto, ' +
+            'remitir al WhatsApp.'
+      );
+
+      if (p?.enlace) lineas.push(`Enlace: ${p.enlace}`);
+      lineas.push('');
+    }
+  }
+
+  return lineas.join('\n').trim();
+}
+
+/**
+ * Recibe el catálogo que manda el plugin de WordPress.
+ * Devuelve cuántos productos quedaron guardados.
+ */
+export function recibirCatalogo(productos) {
+  if (!Array.isArray(productos)) {
+    throw new Error('Se esperaba una lista de productos.');
+  }
+  if (!productos.length) {
+    throw new Error('La lista llegó vacía.');
+  }
+  if (productos.length > 1000) {
+    throw new Error('Demasiados productos en un solo envío.');
+  }
+
+  const texto = armarTextoEnviado(productos);
+  if (!texto) throw new Error('Ningún producto de la lista tenía nombre.');
+
+  modoEnvio = true;
+  memoria = {
+    texto,
+    cuando: Date.now(),
+    productos: productos.length,
+    error: null,
+    pista: null,
+    // En modo envío no volvemos a golpear la tienda.
+    proximoIntento: Number.MAX_SAFE_INTEGER,
+    origen: 'enviado por la página',
+  };
+
+  console.log(`[catalogo] La página envió ${productos.length} productos.`);
+  return productos.length;
+}
+
 /** Una lectura real de la tienda. Solo la llama refrescarSiHaceFalta(). */
 async function leerTienda() {
   const url = `${TIENDA}/wp-json/wc/store/v1/products?per_page=100`;
@@ -176,6 +266,7 @@ async function leerTienda() {
       error: null,
       pista: null,
       proximoIntento: Date.now() + VENCE_EN_MS,
+      origen: 'leído de la tienda',
     };
     console.log(`[catalogo] Actualizado: ${productos.length} productos.`);
 
@@ -202,6 +293,7 @@ async function leerTienda() {
 
 /** Lanza una lectura si toca. Devuelve la promesa en curso, o null. */
 function refrescarSiHaceFalta() {
+  if (modoEnvio) return null; // la página nos lo manda; no hay nada que buscar
   if (enCurso) return enCurso;
   if (Date.now() < memoria.proximoIntento) return null;
   enCurso = leerTienda().finally(() => { enCurso = null; });
@@ -229,6 +321,7 @@ export async function refrescarCatalogo() {
 export function estadoDelCatalogo() {
   return {
     tienda: TIENDA,
+    origen: memoria.origen,
     productos: memoria.productos,
     ultimaLectura: memoria.cuando ? new Date(memoria.cuando).toISOString() : null,
     minutosDeCache: MINUTOS,

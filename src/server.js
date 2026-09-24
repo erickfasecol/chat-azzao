@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { responder } from './cerebro.js';
 import { directorioDeRegistros } from './registro.js';
 import { proveedorActivo, modeloActivo, conversar } from './proveedores.js';
-import { refrescarCatalogo, estadoDelCatalogo } from './catalogo.js';
+import { refrescarCatalogo, estadoDelCatalogo, recibirCatalogo } from './catalogo.js';
+import crypto from 'node:crypto';
 import { enviarTexto, marcarLeido, firmaValida, extraerMensajes } from './whatsapp.js';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,6 +22,8 @@ const app = express();
 // Guardamos el cuerpo sin procesar para poder verificar la firma de Meta.
 app.use(
   express.json({
+    // El catálogo completo con descripciones puede pesar; 100 kB no alcanzan.
+    limit: '2mb',
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -178,6 +181,44 @@ app.post('/api/chat', async (req, res) => {
         'Se nos cayó el chat un momento. Escríbanos al WhatsApp +57 312 390 2067 ' +
         'y lo atendemos de una.',
     });
+  }
+});
+
+// --- Buzón del catálogo ---
+// El plugin de WordPress nos manda aquí la lista de productos cada vez que
+// usted guarda uno. Va en este sentido, y no al revés, porque el firewall del
+// hosting (SiteGround Anti-Bot) le cierra la puerta al bot cuando intenta
+// entrar a leer la tienda. Saliendo desde la propia página, nadie lo bloquea.
+//
+// Se protege con CLAVE_CATALOGO: sin esa variable el buzón queda cerrado.
+function clavesIguales(a, b) {
+  const uno = Buffer.from(String(a));
+  const dos = Buffer.from(String(b));
+  // Longitudes distintas: comparamos igual, para no delatar el largo.
+  if (uno.length !== dos.length) return false;
+  return crypto.timingSafeEqual(uno, dos);
+}
+
+app.post('/catalogo', (req, res) => {
+  const clave = process.env.CLAVE_CATALOGO;
+  if (!clave) {
+    return res.status(404).json({
+      error: 'El buzón está cerrado. Defina CLAVE_CATALOGO en el servidor.',
+    });
+  }
+
+  const enviada = req.get('x-azzao-clave') || req.body?.clave || '';
+  if (!clavesIguales(enviada, clave)) {
+    console.warn('[catalogo] Envío rechazado: clave incorrecta.');
+    return res.status(401).json({ error: 'Clave incorrecta.' });
+  }
+
+  try {
+    const cuantos = recibirCatalogo(req.body?.productos);
+    res.json({ ok: true, productos: cuantos });
+  } catch (error) {
+    console.warn('[catalogo] Envío rechazado:', error?.message);
+    res.status(400).json({ error: error?.message || 'Envío inválido.' });
   }
 });
 
