@@ -1,38 +1,55 @@
 =====================================================================
-  AZZAO — CATALOGO AUTOMATICO  (23 de septiembre de 2026)
+  AZZAO — DOS CORRECCIONES  (24 de septiembre de 2026)
 =====================================================================
 
-QUE CAMBIA
-El bot ya no depende de una lista escrita a mano. Lee los productos
-directamente de azzao.com cada 15 minutos. Usted sube un producto en
-WordPress, le cambia el precio o lo marca agotado, y el bot se entera
-solo. No hay que volver a subir archivos por eso nunca mas.
+1) EL ERROR QUE LE SALIA AL ESCRIBIR
 
-ARCHIVOS DE ESTE PAQUETE — cada uno va a su carpeta en GitHub:
+El log lo dijo claro:
 
-  src/catalogo.js   <-- NUEVO. Va dentro de la carpeta src
-  src/cerebro.js    <-- reemplaza el que esta en src
-  src/server.js     <-- reemplaza el que esta en src
-  data/negocio.md   <-- reemplaza el que esta en data
-  .env.example      <-- va en la raiz (opcional, es solo documentacion)
-  VERSION.txt       <-- va en la raiz. Sirve para confirmar que subio bien
+  503 "This model is currently experiencing high demand"
 
-OJO: catalogo.js, cerebro.js y server.js van DENTRO de src.
-     negocio.md va DENTRO de data.
-     Si los sube a la raiz, el bot no arranca.
+Eso es Google diciendo que su modelo gratuito esta saturado en ese
+momento. No es su llave, no es su codigo y no es el cambio del catalogo.
+Pasa y se quita solo en segundos, pero el bot se rendia al primer intento
+y al visitante le salia el error.
+
+Ahora el bot reintenta solo, hasta 3 veces, esperando cada vez un poquito
+mas. En las pruebas se recupero de dos 503 seguidos en 3 segundos y el
+visitante vio una respuesta normal.
+
+Si de plano Google no responde, al visitante ya no le sale un error seco:
+le sale el WhatsApp para que lo atiendan igual.
+
+2) EL CATALOGO QUE NO SE ACTUALIZABA
+
+Su pagina le devolvia al bot una pagina HTML de bloqueo en vez de la
+lista de productos. Desde internet la lista se ve bien: el bloqueo es
+solo contra el servidor del bot, y suele ser un plugin de seguridad
+(Wordfence, All In One Security) o el firewall del hosting.
+
+Ahora el bot se presenta como un navegador normal, que destapa la mayoria
+de esos bloqueos. Ademas la lectura de la tienda pasa POR DETRAS: el chat
+ya nunca espera por ella.
+
+ARCHIVOS — los cuatro van DENTRO de la carpeta src:
+
+  src/catalogo.js
+  src/cerebro.js
+  src/server.js
+  src/proveedores.js     <-- este es el de los reintentos
+
+  VERSION.txt y .env.example van en la raiz.
+
+NO hay que agregar ninguna variable en Render. Todo trae buen valor por
+defecto.
 
 DESPUES DE SUBIR
-Render se reinicia solo en 2 o 3 minutos. Para confirmar, abra:
+Espere 3 minutos, entre a azzao.com y escribale al chat. Deberia
+responderle normal.
 
-  https://chat-azzao.onrender.com/salud
+Luego abra:  https://chat-azzao.onrender.com/salud
 
-Busque la parte que dice "catalogo". Debe decir algo asi:
-
-  "catalogo": { "productos": 5, "ultimoError": null }
-
-Si dice "productos": 5 (o los que tenga publicados), quedo funcionando.
-Si dice "productos": 0, avise y lo revisamos.
-
-NO HAY QUE TOCAR NADA EN RENDER
-No se necesita ninguna variable nueva ni ninguna llave. La lista de
-productos de WooCommerce es publica, igual que la tienda.
+En la parte "catalogo":
+ - "productos": 5  ->  quedo resuelto, el bot ya se actualiza solo.
+ - "productos": 0  ->  mireme el renglon "respondio": ahi dice que pagina
+   esta devolviendo su sitio. Mandeme eso y sabemos quien bloquea.

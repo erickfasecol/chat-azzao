@@ -1,7 +1,10 @@
-Version CATALOGO AUTOMATICO v3 — 23 de septiembre de 2026
+Version CATALOGO v3.2 — 24 de septiembre de 2026
 
-Novedad: el bot lee los productos directamente de azzao.com cada 15 minutos.
-Cuando usted sube o cambia un producto en WordPress, el bot se entera solo.
+Dos correcciones:
+ 1. La tienda bloqueaba al bot. Ahora se presenta como navegador y la
+    lectura pasa por detras, sin hacer esperar nunca al chat.
+ 2. El error "inconveniente" era Gemini saturado (503). Ahora el bot
+    reintenta solo y el visitante ni se entera.
 
-Si este archivo aparece en GitHub con la fecha del 23 de septiembre,
+Si este archivo aparece en GitHub con la fecha del 24 de septiembre,
 la version correcta quedo subida.
