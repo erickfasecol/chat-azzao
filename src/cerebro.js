@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { conversar } from './proveedores.js';
-import { obtenerCatalogo } from './catalogo.js';
+import { catalogoActual } from './catalogo.js';
 import { guardarPedido, guardarContacto, guardarEscalado, guardarTurno } from './registro.js';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -107,13 +107,14 @@ ${CONOCIMIENTO}
 ---`;
 }
 
-async function armarInstrucciones() {
+// Nunca espera a la tienda: usa lo que ya está en memoria. Si toca refrescar,
+// catalogoActual() lo lanza por detrás y la lectura nueva entra en el mensaje
+// siguiente. Así una tienda lenta o caída jamás demora una respuesta.
+function armarInstrucciones() {
   let catalogo = null;
   try {
-    catalogo = await obtenerCatalogo();
+    catalogo = catalogoActual();
   } catch {
-    // obtenerCatalogo no debería lanzar, pero si lo hace el bot sigue
-    // atendiendo con el catálogo escrito.
     catalogo = null;
   }
   return armarConCatalogo(catalogo);
@@ -253,9 +254,7 @@ export async function responder(telefono, texto) {
 
   let salida = '';
 
-  // Se arma una vez por mensaje: si el catálogo está fresco no cuesta nada, y
-  // si toca releer la tienda se hace aquí y no en cada vuelta.
-  const instrucciones = await armarInstrucciones();
+  const instrucciones = armarInstrucciones();
 
   // Hasta 5 vueltas: el modelo puede pedir una herramienta y luego seguir escribiendo.
   for (let vuelta = 0; vuelta < 5; vuelta++) {

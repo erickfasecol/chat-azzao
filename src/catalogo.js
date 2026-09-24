@@ -6,20 +6,38 @@
 //
 //   https://azzao.com/wp-json/wc/store/v1/products
 //
-// Se consulta cada cierto tiempo, no en cada mensaje, para no golpear la
-// tienda de más. Si la tienda no responde, se sigue usando la última copia
-// buena; y si nunca hubo una, el bot cae al catálogo escrito en negocio.md.
+// Dos reglas de oro:
+//
+//  1. ESTO NUNCA DEBE DEMORAR UNA RESPUESTA DEL CHAT. La lectura de la tienda
+//     pasa por detrás. El chat usa lo que haya en memoria y sigue de largo.
+//  2. ESTO NUNCA DEBE TUMBAR EL BOT. Si la tienda falla, se usa la última copia
+//     buena; y si nunca hubo una, el bot cae al catálogo de data/negocio.md.
 
 const TIENDA = (process.env.TIENDA_URL || 'https://azzao.com').replace(/\/$/, '');
 const MINUTOS = Number(process.env.CATALOGO_MINUTOS || 15);
 const VENCE_EN_MS = Math.max(1, MINUTOS) * 60 * 1000;
+
+// Si la tienda falla no insistimos a cada rato: esperamos antes de reintentar.
+const REINTENTO_MS = 5 * 60 * 1000;
+
+// Algunos hostings y plugins de seguridad de WordPress bloquean las peticiones
+// que no parecen venir de un navegador y devuelven una página HTML de bloqueo
+// en vez de la lista de productos. Por eso nos presentamos como un navegador.
+const NAVEGADOR =
+  process.env.CATALOGO_UA ||
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 let memoria = {
   texto: null,
   cuando: 0,
   productos: 0,
   error: null,
+  pista: null,
+  proximoIntento: 0,
 };
+
+let enCurso = null;
 
 /** Quita etiquetas HTML y deja texto corrido legible. */
 function sinHtml(html) {
@@ -112,59 +130,99 @@ function armarTexto(productos) {
   return lineas.join('\n').trim();
 }
 
-/**
- * Devuelve el catálogo en texto, o null si nunca se pudo leer.
- * No lanza excepciones: si algo falla, el bot debe seguir atendiendo.
- */
-export async function obtenerCatalogo() {
-  const fresco = memoria.texto && Date.now() - memoria.cuando < VENCE_EN_MS;
-  if (fresco) return memoria.texto;
+/** Una lectura real de la tienda. Solo la llama refrescarSiHaceFalta(). */
+async function leerTienda() {
+  const url = `${TIENDA}/wp-json/wc/store/v1/products?per_page=100`;
 
   try {
-    const url = `${TIENDA}/wp-json/wc/store/v1/products?per_page=100`;
     const respuesta = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(10000),
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': NAVEGADOR,
+        'Accept-Language': 'es-CO,es;q=0.9',
+      },
+      signal: AbortSignal.timeout(8000),
     });
 
+    const tipo = respuesta.headers.get('content-type') || '';
+    const cuerpo = await respuesta.text();
+
     if (!respuesta.ok) {
-      throw new Error(`la tienda respondió ${respuesta.status}`);
+      throw Object.assign(new Error(`la tienda respondió ${respuesta.status}`), {
+        pista: cuerpo.slice(0, 200),
+      });
     }
 
-    const productos = await respuesta.json();
-    if (!Array.isArray(productos)) {
-      throw new Error('la tienda no devolvió una lista de productos');
+    // Si llega HTML en vez de JSON, casi siempre es un plugin de seguridad, un
+    // modo "próximamente" o el firewall del hosting tapando la petición.
+    if (!tipo.includes('json') || cuerpo.trim().startsWith('<')) {
+      throw Object.assign(
+        new Error(
+          'la tienda devolvió una página HTML en vez de la lista de productos ' +
+          '(posible plugin de seguridad, modo próximamente o firewall del hosting)'
+        ),
+        { pista: cuerpo.replace(/\s+/g, ' ').slice(0, 200) }
+      );
     }
-    if (!productos.length) {
-      throw new Error('la tienda no tiene productos publicados');
-    }
+
+    const productos = JSON.parse(cuerpo);
+    if (!Array.isArray(productos)) throw new Error('la tienda no devolvió una lista');
+    if (!productos.length) throw new Error('la tienda no tiene productos publicados');
 
     memoria = {
       texto: armarTexto(productos),
       cuando: Date.now(),
       productos: productos.length,
       error: null,
+      pista: null,
+      proximoIntento: Date.now() + VENCE_EN_MS,
     };
     console.log(`[catalogo] Actualizado: ${productos.length} productos.`);
-    return memoria.texto;
 
   } catch (error) {
-    memoria.error = error.message;
+    memoria.error = error?.message || String(error);
+    memoria.pista = error?.pista || null;
+    memoria.proximoIntento = Date.now() + REINTENTO_MS;
+
     if (memoria.texto) {
       console.warn(
-        '[catalogo] No se pudo actualizar (' + error.message + '). ' +
-        'Se sigue usando la última copia.'
+        `[catalogo] No se pudo actualizar (${memoria.error}). Se sigue usando la última copia.`
       );
-      // Damos un respiro antes de reintentar, para no insistir en cada mensaje.
-      memoria.cuando = Date.now() - VENCE_EN_MS + 60 * 1000;
-      return memoria.texto;
+    } else {
+      console.warn(
+        `[catalogo] No se pudo leer la tienda (${memoria.error}). ` +
+        'El bot usará el catálogo escrito en data/negocio.md.'
+      );
+      if (memoria.pista) console.warn(`[catalogo] Respondió: ${memoria.pista}`);
     }
-    console.warn(
-      '[catalogo] No se pudo leer la tienda (' + error.message + '). ' +
-      'El bot usará el catálogo escrito en negocio.md.'
-    );
-    return null;
   }
+
+  return memoria.texto;
+}
+
+/** Lanza una lectura si toca. Devuelve la promesa en curso, o null. */
+function refrescarSiHaceFalta() {
+  if (enCurso) return enCurso;
+  if (Date.now() < memoria.proximoIntento) return null;
+  enCurso = leerTienda().finally(() => { enCurso = null; });
+  return enCurso;
+}
+
+/**
+ * El catálogo que hay ahora mismo, sin esperar a nadie.
+ * Si toca refrescar, lo hace por detrás y esa respuesta entra en el mensaje
+ * siguiente. Esto es lo que usa el chat.
+ */
+export function catalogoActual() {
+  refrescarSiHaceFalta();
+  return memoria.texto;
+}
+
+/** Espera la lectura. Solo se usa al arrancar el servidor. */
+export async function refrescarCatalogo() {
+  const pendiente = refrescarSiHaceFalta();
+  if (pendiente) await pendiente;
+  return memoria.texto;
 }
 
 /** Para /salud y /diagnostico. */
@@ -175,6 +233,7 @@ export function estadoDelCatalogo() {
     ultimaLectura: memoria.cuando ? new Date(memoria.cuando).toISOString() : null,
     minutosDeCache: MINUTOS,
     ultimoError: memoria.error,
+    respondio: memoria.pista,
   };
 }
 

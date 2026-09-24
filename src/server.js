@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { responder } from './cerebro.js';
 import { directorioDeRegistros } from './registro.js';
 import { proveedorActivo, modeloActivo, conversar } from './proveedores.js';
-import { obtenerCatalogo, estadoDelCatalogo } from './catalogo.js';
+import { refrescarCatalogo, estadoDelCatalogo } from './catalogo.js';
 import { enviarTexto, marcarLeido, firmaValida, extraerMensajes } from './whatsapp.js';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -172,8 +172,11 @@ app.post('/api/chat', async (req, res) => {
       cuando: new Date().toISOString(),
       mensaje: error?.message || String(error),
     };
+    // El visitante no tiene por qué quedarse sin salida: se le da el WhatsApp.
     res.status(500).json({
-      error: 'Tuvimos un inconveniente. Por favor intente de nuevo en un momento.',
+      error:
+        'Se nos cayó el chat un momento. Escríbanos al WhatsApp +57 312 390 2067 ' +
+        'y lo atendemos de una.',
     });
   }
 });
@@ -276,7 +279,7 @@ app.listen(PUERTO, '0.0.0.0', () => {
 
   // Primera lectura de la tienda al arrancar, para que el primer visitante no
   // tenga que esperarla.
-  obtenerCatalogo().then((texto) => {
+  refrescarCatalogo().then((texto) => {
     const estado = estadoDelCatalogo();
     if (texto) {
       console.log(`  Catálogo:         ${estado.productos} productos leídos de ${estado.tienda}`);
